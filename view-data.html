@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Key 收集记录</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    min-height: 100vh;
+    padding: 20px;
+    color: #fff;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    margin-bottom: 24px;
+    color: #ffd700;
+  }
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    flex: 1;
+    background: rgba(255,255,255,0.1);
+    padding: 20px;
+    border-radius: 12px;
+    text-align: center;
+  }
+  .stat-card .num {
+    font-size: 32px;
+    font-weight: bold;
+    color: #ffd700;
+  }
+  .stat-card .label { color: #aaa; font-size: 14px; }
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+  }
+  .btn-primary { background: #ffd700; color: #222; }
+  .btn-danger { background: #ff4444; color: #fff; }
+  .btn-primary:hover, .btn-danger:hover { opacity: 0.8; }
+  .table-container {
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  th {
+    background: rgba(0,0,0,0.3);
+    color: #ffd700;
+    font-size: 13px;
+    text-transform: uppercase;
+  }
+  td { font-size: 13px; }
+  .api-key {
+    font-family: Consolas, monospace;
+    color: #7dffa0;
+    cursor: pointer;
+  }
+  .api-key:hover { color: #ffd700; }
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+  }
+  .copy-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    padding: 10px 20px;
+    border-radius: 8px;
+    display: none;
+  }
+  .copy-toast.show { display: block; }
+  .time { color: #aaa; font-size: 12px; }
+  .amount { color: #ff8c00; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔐 API Key 收集记录</h1>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="num" id="totalCount">0</div>
+      <div class="label">总记录数</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="todayCount">0</div>
+      <div class="label">今日新增</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="exportData()">📥 导出数据</button>
+    <button class="btn btn-danger" onclick="clearData()">🗑️ 清空所有</button>
+    <button class="btn btn-primary" onclick="location.reload()">🔄 刷新</button>
+  </div>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>API Key</th>
+          <th>充值数量</th>
+          <th>时间</th>
+          <th>设备</th>
+        </tr>
+      </thead>
+      <tbody id="dataBody">
+        <tr><td colspan="5" class="empty">暂无数据，等待收集中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="copy-toast" id="toast">已复制到剪贴板</div>
+
+<script>
+  const STORAGE_KEY = 'token_farm_api_keys';
+
+  function loadData() {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  }
+
+  function displayData() {
+    const data = loadData();
+    const body = document.getElementById('dataBody');
+
+    if (data.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="empty">暂无数据，等待收集中...</td></tr>';
+      document.getElementById('totalCount').textContent = '0';
+      document.getElementById('todayCount').textContent = '0';
+      return;
+    }
+
+    // 按时间倒序排列
+    data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // 计算统计
+    document.getElementById('totalCount').textContent = data.length;
+    const today = new Date().toDateString();
+    const todayCount = data.filter(d => new Date(d.timestamp).toDateString() === today).length;
+    document.getElementById('todayCount').textContent = todayCount;
+
+    // 渲染表格
+    body.innerHTML = data.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td class="api-key" onclick="copyKey('${escapeHtml(item.apiKey)}')" title="点击复制">${escapeHtml(item.apiKey)}</td>
+        <td class="amount">+${item.amount.toLocaleString()}</td>
+        <td class="time">${formatTime(item.timestamp)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.userAgent)}">${getDevice(item.userAgent)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function formatTime(ts) {
+    const d = new Date(ts);
+    return d.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
+  function getDevice(ua) {
+    if (ua.includes('iPhone')) return '📱 iPhone';
+    if (ua.includes('Android')) return '📱 Android';
+    if (ua.includes('Windows')) return '💻 Windows';
+    if (ua.includes('Mac')) return '💻 Mac';
+    if (ua.includes('Linux')) return '💻 Linux';
+    return '📟 其他';
+  }
+
+  function copyKey(key) {
+    navigator.clipboard.writeText(key).then(() => {
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1500);
+    });
+  }
+
+  function exportData() {
+    const data = loadData();
+    if (data.length === 0) {
+      alert('没有数据可导出！');
+      return;
+    }
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `api-keys-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function clearData() {
+    if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    displayData();
+  }
+
+  displayData();
+</script>
+</body>
+</html>
